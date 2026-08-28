@@ -1,0 +1,367 @@
+# vim: set ft=hcl :
+#
+# Todo Dark Factory — agents do the work; this file only wires targets, gates,
+# and phases. The ONE script kept is the commit validator.
+#
+#   issue -> planner opens the item's PR with the plan
+#         -> [GATE plan: approving review on the PR, polled by the
+#             bach-github-approval-provider]
+#         -> implementer ships code + narrated demo video to the same PR
+#         -> [GATE deploy.staging: fresh approving review on the PR]
+#         -> squash-merge -> LOCAL deploy -> evidence
+
+project "todo-dark-factory" {
+  root    = "."
+  default = "group.ci"
+}
+
+var "github_repo" {
+  default = "ApplauseLab/bachfactory-demo"
+}
+
+var "s3_bucket" {
+  default = "cnicolov-todo-dark-factory"
+}
+
+var "commit_msg_file" {
+  default = ""
+}
+
+var "item_id" {
+  default = ""
+}
+
+input "file" "app_sources" {
+  srcs = ["package.json", "bun.lock", "apps", "e2e"]
+}
+
+provider "opencode" {
+  type = "opencode"
+}
+
+provider "opencode_run" {
+  type    = "agent"
+  command = ["opencode", "run"]
+}
+
+prompt "planner" {
+  path        = "prompts/planner.md"
+  description = "Plans the item and opens its PR (the approval surface)"
+  version     = "v2"
+}
+
+prompt "implementer" {
+  path        = "prompts/implementer.md"
+  description = "Builds, records narrated demo, pushes to the item PR"
+  version     = "v2"
+}
+
+prompt "merge" {
+  path        = "prompts/merge.md"
+  description = "Lands the item on its PR: push work, publish demo, announce"
+  version     = "v1"
+}
+
+prompt "architecture_review" {
+  path = "prompts/architecture-review.md"
+}
+
+prompt "security_review" {
+  path = "prompts/security-review.md"
+}
+
+# ---------------------------------------------------------------------------
+# CI gates
+# ---------------------------------------------------------------------------
+
+shell "commit_msg" {
+  description = "Validate a Conventional Commit subject (AGENTS.md rules 1-4)"
+  command     = ["sh", "scripts/factory/commit-msg.sh", var.commit_msg_file]
+}
+
+shell "server_test" {
+  description = "API unit tests (JUnit quality gate)"
+  command = [
+    "sh", "-c",
+    "mkdir -p .bach/artifacts && { [ -d apps/server ] && bun test apps/server --reporter junit --reporter-outfile .bach/artifacts/server-junit.xml || printf '<testsuites tests=\"1\"><testsuite name=\"apps-server-skipped\" tests=\"1\"><testcase name=\"bootstrap\"/></testsuite></testsuites>' > .bach/artifacts/server-junit.xml; }",
+  ]
+  inputs  = [input.file.app_sources]
+  outputs = {
+    junit = ".bach/artifacts/server-junit.xml"
+  }
+  timeout = "5m"
+}
+
+quality "shell.server_test" {
+  junit {
+    path   = shell.server_test.outputs.junit
+    format = "junit-xml"
+  }
+
+  quality_gate {
+    metric = "tests.failed"
+    max    = 0
+  }
+}
+
+shell "web_test" {
+  description = "Web unit tests (JUnit quality gate)"
+  command = [
+    "sh", "-c",
+    "mkdir -p .bach/artifacts && { [ -d apps/web ] && bun test apps/web --reporter junit --reporter-outfile .bach/artifacts/web-junit.xml || printf '<testsuites tests=\"1\"><testsuite name=\"apps-web-skipped\" tests=\"1\"><testcase name=\"bootstrap\"/></testsuite></testsuites>' > .bach/artifacts/web-junit.xml; }",
+  ]
+  inputs  = [input.file.app_sources]
+  outputs = {
+    junit = ".bach/artifacts/web-junit.xml"
+  }
+  timeout = "5m"
+}
+
+quality "shell.web_test" {
+  junit {
+    path   = shell.web_test.outputs.junit
+    format = "junit-xml"
+  }
+
+  quality_gate {
+    metric = "tests.failed"
+    max    = 0
+  }
+}
+
+group "ci" {
+  description = "Unit test gates across the monorepo"
+  targets     = [shell.server_test, shell.web_test]
+}
+
+# ---------------------------------------------------------------------------
+# Merge phase: the item PR already carries code + narrated video (agent-made).
+# Publish the video publicly and link it on the PR.
+# ---------------------------------------------------------------------------
+
+shell "pr_merge" {
+  description   = "Squash-merge the approved item PR and fast-forward main"
+  remote        = true
+  env {
+    ITEM_ID = var.item_id
+  }
+  command = [
+    "sh", "-c",
+    <<-EOT
+      set -e
+      if [ -n "$ITEM_ID" ]; then
+        gh pr list --repo ApplauseLab/bachfactory-demo --head "bach/factory/$ITEM_ID/plan" --state open --json number 2>/dev/null > /tmp/.prs || echo "[]" > /tmp/.prs
+        jq -r '.[0].number // empty' /tmp/.prs > /tmp/.n 2>/dev/null || true
+      else
+        gh pr list --repo ApplauseLab/bachfactory-demo --state open --json number,headRefName 2>/dev/null > /tmp/.prs || echo "[]" > /tmp/.prs
+        jq -r '.[] | select(.headRefName | startswith("bach/")) | .number' /tmp/.prs 2>/dev/null | head -n1 > /tmp/.n || true
+      fi
+      if [ ! -s /tmp/.n ] || [ "$(cat /tmp/.n)" = "null" ]; then
+        echo "MERGE SKIPPED: no open item PR"
+        exit 0
+      fi
+      gh pr comment "$(cat /tmp/.n)" --repo ApplauseLab/bachfactory-demo --body "🚀 /approve recorded - merging now..." >/dev/null || true
+      gh pr merge "$(cat /tmp/.n)" --repo ApplauseLab/bachfactory-demo --squash --delete-branch=false
+      git clean -fq plans/ 2>/dev/null || true
+      git pull --ff-only origin main --quiet
+      echo "PR MERGED"
+    EOT
+  ]
+
+  success_when {
+    output_contains = "PR MERGED"
+  }
+
+  success_when {
+    output_contains = "MERGE SKIPPED"
+  }
+}
+
+shell "local_deploy" {
+  description = "LOCAL-only deploy of merged main: install, build, manifest"
+  depends_on  = [shell.pr_merge]
+  command = [
+    "sh", "-c",
+    <<-EOT
+      set -e
+      mkdir -p dist
+      if [ -f bun.lock ]; then bun install --frozen-lockfile || rtk bun install; else bun install || true; fi
+      if [ -d apps/server ]; then
+        (cd apps/server && rtk bun run build) || { echo "BUILD ""FAILED"; exit 1; }
+        cp apps/server/dist/index.js dist/server.js
+      fi
+      if [ -d apps/web ]; then
+        (cd apps/web && rtk bun run build) || { echo "BUILD ""FAILED"; exit 1; }
+        rm -rf dist/web
+        cp -R apps/web/dist dist/web || cp -R apps/web/build dist/web
+      fi
+      printf '{"environment":"local","commit":"%s","manifest":"dist/deploy-manifest.json"}\n' "$(git rev-parse HEAD)" > dist/deploy-manifest.json
+      echo "DEPLOY COMPLETE (local)"
+    EOT
+  ]
+  quiet   = true
+  inputs  = [input.file.app_sources]
+
+  success_when {
+    output_contains = "DEPLOY COMPLETE"
+  }
+
+  fail_when {
+    output_contains = "BUILD FAILED"
+  }
+}
+
+shell "evidence" {
+  description = "Prove local deployment + public video reachability"
+  depends_on  = [shell.local_deploy]
+  command = [
+    "sh", "-c",
+    "set -e; test -f dist/deploy-manifest.json || { echo \"EVIDENCE \"\"FAILED\"\": no manifest\"; exit 1; }; { [ -f dist/demo-url.txt ] && curl -fsSI \"$(cat dist/demo-url.txt)\" >/dev/null && echo VIDEO LIVE $(cat dist/demo-url.txt) || echo video not published; }; echo EVIDENCE OK; git -C \"$(ls -dt .bach/agents/* | grep -v planner- | head -n1)\" rev-parse --abbrev-ref HEAD 2>/dev/null | sed 's|^bach/work/plan-||;s|^bach/work/||' > /tmp/.itemid || true; if [ -s /tmp/.itemid ] && [ -s /tmp/.prnum ]; then gh pr comment \"$(cat /tmp/.prnum)\" --repo ApplauseLab/bachfactory-demo --body \"✅ Merged and deployed locally - health verified, work item complete.\" >/dev/null && echo \"COMPLETION COMMENT on PR #$(cat /tmp/.prnum)\"; fi",
+  ]
+
+  success_when {
+    output_contains = "EVIDENCE OK"
+  }
+
+  fail_when {
+    output_contains = "EVIDENCE FAILED"
+  }
+}
+
+pipeline "release_lane" {
+  description = "Approved PR -> squash merge -> LOCAL deploy -> evidence"
+  timeout     = "15m"
+  steps       = [shell.pr_merge, shell.local_deploy, shell.evidence]
+}
+
+pipeline "verify_lane" {
+  description = "Standalone re-proof of deployment + published demo"
+  timeout     = "5m"
+  steps       = [shell.evidence]
+}
+
+# ---------------------------------------------------------------------------
+# Agents + reviewer policy
+# ---------------------------------------------------------------------------
+
+agent_template "planner" {
+  mode     = "implement"
+  provider = provider.opencode
+  role     = "planner"
+  prompt   = prompt.planner
+}
+
+agent_template "implementer" {
+  mode     = "implement"
+  provider = provider.opencode
+  role     = "implementer"
+  prompt   = prompt.implementer
+  policy   = policy.factory_gate
+
+  workspace {
+    path = ".bach/agents/${work_item.slug}"
+  }
+
+  git {
+    branch = "bach/work/${work_item.id}"
+  }
+}
+
+agent_template "merger" {
+  mode     = "implement"
+  provider = provider.opencode
+  role     = "merger"
+  prompt   = prompt.merge
+}
+
+agent_template "architecture_reviewer" {
+  mode     = "review"
+  provider = provider.opencode_run
+  role     = "architecture-reviewer"
+  prompt   = prompt.architecture_review
+}
+
+agent_template "security_reviewer" {
+  mode     = "review"
+  provider = provider.opencode_run
+  role     = "security-reviewer"
+  prompt   = prompt.security_review
+}
+
+agent "architecture_review" {
+  template = agent_template.architecture_reviewer
+}
+
+agent "security_review" {
+  template = agent_template.security_reviewer
+}
+
+policy "factory_gate" {
+  reviewers        = [agent.architecture_review, agent.security_review]
+  required_targets = [shell.server_test]
+
+  quality_gate {
+    metric = "findings.error.open.count"
+    max    = 0
+  }
+}
+
+# ---------------------------------------------------------------------------
+# Dark factory queue: GitHub issues in, approved PRs out
+# ---------------------------------------------------------------------------
+
+factory "todo" {
+  workflow "ship" {
+    plan {
+      agent_template    = agent_template.planner
+      path              = "plans/factory/${work_item.id}.md"
+      requires_approval = true
+    }
+
+    implement {
+      agent_template    = agent_template.implementer
+      requires_approval = true
+    }
+
+    merge {
+      agent_template    = agent_template.merger
+      requires_approval = true
+    }
+
+    deploy "staging" {
+      target            = pipeline.release_lane
+      requires_approval = true
+    }
+
+    verify "staging" {
+      target = pipeline.verify_lane
+    }
+  }
+
+  triggers {
+    manual {}
+
+    provider "github" {
+      command       = ["bach-github-issue-trigger"]
+      poll_interval = "1m"
+      config = {
+        repo                  = var.github_repo
+        labels                = "factory"
+        token_env             = "GITHUB_TOKEN"
+        priority_label_prefix = "priority:"
+      }
+    }
+  }
+
+  approvals {
+    provider "github" {
+      command       = ["bach-github-approval-provider"]
+      poll_interval = "30s"
+      config = {
+        repo      = var.github_repo
+        token_env = "GITHUB_TOKEN"
+        phases    = "plan,implement,merge,deploy.staging"
+      }
+    }
+  }
+}

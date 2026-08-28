@@ -1,0 +1,5 @@
+{
+  "name": "bach-example-todo-factory",
+  "private": true,
+  "workspaces": ["apps/*"]
+}
