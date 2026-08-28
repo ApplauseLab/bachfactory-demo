@@ -9,3 +9,8 @@ demo-artifacts/*.mp4
 demo-artifacts/*.raw.mp4
 dist/
 node_modules/
+artifacts/
+test-results/
+playwright-report/
+demo-artifacts/*.webm
+demo-artifacts/*.wav
