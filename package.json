@@ -1,5 +1,8 @@
 {
   "name": "bach-example-todo-factory",
   "private": true,
-  "workspaces": ["apps/*"]
+  "workspaces": ["apps/*"],
+  "devDependencies": {
+    "@playwright/test": "^1.56.0"
+  }
 }
