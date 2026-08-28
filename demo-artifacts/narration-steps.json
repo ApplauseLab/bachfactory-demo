@@ -1,0 +1,31 @@
+{
+  "voice": "af_jessica",
+  "outputPath": "/Users/kris/scratchpad/bach-example-todo-factory/.bach/agents/01a047aa-320e-7864-8b65-0b23e8549318/demo-artifacts/narration.wav",
+  "steps": [
+    {
+      "type": "say",
+      "atMs": 800,
+      "text": "This is the new todo app — a Bun and SQLite API, with a React client on top."
+    },
+    {
+      "type": "say",
+      "atMs": 12400,
+      "text": "Adding a task takes one field and one click, and it lands straight from the API."
+    },
+    {
+      "type": "say",
+      "atMs": 19500,
+      "text": "Toggling marks it done, and the remaining counter updates."
+    },
+    {
+      "type": "say",
+      "atMs": 26600,
+      "text": "Deleting removes it everywhere, keeping client and server in sync."
+    },
+    {
+      "type": "say",
+      "atMs": 31300,
+      "text": "Plan, code, tests, and this demo — shipped end to end by the dark factory."
+    }
+  ]
+}
