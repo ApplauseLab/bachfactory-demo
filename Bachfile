@@ -16,7 +16,7 @@ project "todo-dark-factory" {
 }
 
 var "github_repo" {
-  default = "cnicolov/bach-example-todo-factory"
+  default = "ApplauseLab/bachfactory-demo"
 }
 
 var "s3_bucket" {
@@ -150,18 +150,18 @@ shell "pr_merge" {
     <<-EOT
       set -e
       if [ -n "$ITEM_ID" ]; then
-        gh pr list --repo cnicolov/bach-example-todo-factory --head "bach/factory/$ITEM_ID/plan" --state open --json number 2>/dev/null > /tmp/.prs || echo "[]" > /tmp/.prs
+        gh pr list --repo ApplauseLab/bachfactory-demo --head "bach/factory/$ITEM_ID/plan" --state open --json number 2>/dev/null > /tmp/.prs || echo "[]" > /tmp/.prs
         jq -r '.[0].number // empty' /tmp/.prs > /tmp/.n 2>/dev/null || true
       else
-        gh pr list --repo cnicolov/bach-example-todo-factory --state open --json number,headRefName 2>/dev/null > /tmp/.prs || echo "[]" > /tmp/.prs
+        gh pr list --repo ApplauseLab/bachfactory-demo --state open --json number,headRefName 2>/dev/null > /tmp/.prs || echo "[]" > /tmp/.prs
         jq -r '.[] | select(.headRefName | startswith("bach/")) | .number' /tmp/.prs 2>/dev/null | head -n1 > /tmp/.n || true
       fi
       if [ ! -s /tmp/.n ] || [ "$(cat /tmp/.n)" = "null" ]; then
         echo "MERGE SKIPPED: no open item PR"
         exit 0
       fi
-      gh pr comment "$(cat /tmp/.n)" --repo cnicolov/bach-example-todo-factory --body "🚀 /approve recorded - merging now..." >/dev/null || true
-      gh pr merge "$(cat /tmp/.n)" --repo cnicolov/bach-example-todo-factory --squash --delete-branch=false
+      gh pr comment "$(cat /tmp/.n)" --repo ApplauseLab/bachfactory-demo --body "🚀 /approve recorded - merging now..." >/dev/null || true
+      gh pr merge "$(cat /tmp/.n)" --repo ApplauseLab/bachfactory-demo --squash --delete-branch=false
       git clean -fq plans/ 2>/dev/null || true
       git pull --ff-only origin main --quiet
       echo "PR MERGED"
@@ -216,7 +216,7 @@ shell "evidence" {
   depends_on  = [shell.local_deploy]
   command = [
     "sh", "-c",
-    "set -e; test -f dist/deploy-manifest.json || { echo \"EVIDENCE \"\"FAILED\"\": no manifest\"; exit 1; }; { [ -f dist/demo-url.txt ] && curl -fsSI \"$(cat dist/demo-url.txt)\" >/dev/null && echo VIDEO LIVE $(cat dist/demo-url.txt) || echo video not published; }; echo EVIDENCE OK; git -C \"$(ls -dt .bach/agents/* | grep -v planner- | head -n1)\" rev-parse --abbrev-ref HEAD 2>/dev/null | sed 's|^bach/work/plan-||;s|^bach/work/||' > /tmp/.itemid || true; if [ -s /tmp/.itemid ] && [ -s /tmp/.prnum ]; then gh pr comment \"$(cat /tmp/.prnum)\" --repo cnicolov/bach-example-todo-factory --body \"✅ Merged and deployed locally - health verified, work item complete.\" >/dev/null && echo \"COMPLETION COMMENT on PR #$(cat /tmp/.prnum)\"; fi",
+    "set -e; test -f dist/deploy-manifest.json || { echo \"EVIDENCE \"\"FAILED\"\": no manifest\"; exit 1; }; { [ -f dist/demo-url.txt ] && curl -fsSI \"$(cat dist/demo-url.txt)\" >/dev/null && echo VIDEO LIVE $(cat dist/demo-url.txt) || echo video not published; }; echo EVIDENCE OK; git -C \"$(ls -dt .bach/agents/* | grep -v planner- | head -n1)\" rev-parse --abbrev-ref HEAD 2>/dev/null | sed 's|^bach/work/plan-||;s|^bach/work/||' > /tmp/.itemid || true; if [ -s /tmp/.itemid ] && [ -s /tmp/.prnum ]; then gh pr comment \"$(cat /tmp/.prnum)\" --repo ApplauseLab/bachfactory-demo --body \"✅ Merged and deployed locally - health verified, work item complete.\" >/dev/null && echo \"COMPLETION COMMENT on PR #$(cat /tmp/.prnum)\"; fi",
   ]
 
   success_when {
