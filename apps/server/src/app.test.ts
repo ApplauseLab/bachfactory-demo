@@ -1,10 +1,16 @@
 import { describe, expect, test } from "bun:test";
 import { openDatabase } from "./db";
 import { createApp, DEFAULT_WEB_ORIGIN } from "./app";
+import type { Auth } from "./auth";
+
+const authenticatedAuth = {
+  handler: () => new Response(null, { status: 404 }),
+  api: { getSession: async () => ({ session: {}, user: {} }) },
+} as unknown as Auth;
 
 function makeTestApp() {
   const db = openDatabase(":memory:");
-  return createApp({ db, webOrigin: DEFAULT_WEB_ORIGIN });
+  return createApp({ db, auth: authenticatedAuth, webOrigin: DEFAULT_WEB_ORIGIN });
 }
 
 async function call(
@@ -191,7 +197,7 @@ describe("CORS", () => {
 
   test("honors custom WEB_ORIGIN", async () => {
     const db = openDatabase(":memory:");
-    const app = createApp({ db, webOrigin: "https://app.example" });
+    const app = createApp({ db, auth: authenticatedAuth, webOrigin: "https://app.example" });
     const res = await call(app, "GET", "/todos");
     expect(res.headers.get("access-control-allow-origin")).toBe("https://app.example");
   });

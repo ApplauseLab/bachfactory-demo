@@ -31,6 +31,135 @@ body {
   gap: 24px;
 }
 
+.auth-shell {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+}
+
+.auth-card {
+  width: min(100%, 430px);
+  padding: 36px;
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  background: linear-gradient(145deg, color-mix(in srgb, var(--panel) 96%, white), var(--panel));
+  box-shadow: 0 24px 80px rgb(0 0 0 / 35%);
+}
+
+.brand-mark {
+  display: grid;
+  place-items: center;
+  width: 42px;
+  height: 42px;
+  margin-bottom: 24px;
+  border-radius: 12px;
+  background: var(--accent);
+  color: #06202e;
+  font-weight: 800;
+  letter-spacing: -0.04em;
+}
+
+.eyebrow {
+  margin: 0 0 5px;
+  color: var(--accent);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.auth-card h1 {
+  margin: 0;
+  font-size: 30px;
+  letter-spacing: -0.03em;
+}
+
+.auth-copy {
+  margin: 8px 0 26px;
+  color: var(--muted);
+  font-size: 14px;
+}
+
+.auth-form {
+  display: grid;
+  gap: 16px;
+}
+
+.auth-form label {
+  display: grid;
+  gap: 7px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.auth-form input {
+  width: 100%;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  outline: none;
+  background: var(--bg);
+  color: var(--text);
+  font: inherit;
+}
+
+.auth-form input:focus {
+  border-color: var(--accent);
+}
+
+.auth-submit {
+  margin-top: 4px;
+  padding: 13px 18px;
+  border: 0;
+  border-radius: 10px;
+  background: var(--accent);
+  color: #06202e;
+  cursor: pointer;
+  font-weight: 700;
+}
+
+.mode-toggle,
+.sign-out {
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.mode-toggle {
+  display: block;
+  margin: 20px auto 0;
+}
+
+.mode-toggle:hover,
+.sign-out:hover {
+  color: var(--text);
+}
+
+.auth-loading {
+  color: var(--muted);
+}
+
+.account-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-bottom: 18px;
+  border-bottom: 1px solid var(--border);
+}
+
+.account-email {
+  margin: 0;
+  font-size: 14px;
+}
+
+.sign-out {
+  padding: 8px 0 8px 16px;
+  font-size: 13px;
+}
+
 .header h1 {
   margin: 0;
   font-size: 32px;
@@ -177,4 +306,18 @@ body {
   font-size: 12px;
   letter-spacing: 0.04em;
   text-transform: uppercase;
+}
+
+@media (max-width: 520px) {
+  .shell {
+    padding: 32px 18px;
+  }
+
+  .auth-card {
+    padding: 28px 22px;
+  }
+
+  .add-row {
+    flex-direction: column;
+  }
 }

@@ -5,6 +5,7 @@ interface FetchCall {
   url: string;
   method: string;
   body?: string;
+  credentials?: RequestCredentials;
 }
 
 const calls: FetchCall[] = [];
@@ -25,6 +26,7 @@ beforeEach(() => {
       url: String(input),
       method: init?.method ?? "GET",
       body: typeof init?.body === "string" ? init.body : undefined,
+      credentials: init?.credentials,
     });
     return jsonResponse(
       jsonResponseStatus.status,
@@ -59,7 +61,7 @@ describe("api client", () => {
   test("listTodos GETs /todos and decodes the array", async () => {
     respondWith(200, [sample]);
     const todos = await api.listTodos();
-    expect(calls).toEqual([{ url: `${API_BASE}/todos`, method: "GET" }]);
+    expect(calls).toEqual([{ url: `${API_BASE}/todos`, method: "GET", credentials: "include" }]);
     expect(todos).toEqual([sample]);
   });
 
