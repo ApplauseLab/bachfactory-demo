@@ -5,7 +5,7 @@
 apps/server/data/
 artifacts/
 data/
-demo-artifacts/*.mp4
-demo-artifacts/*.raw.mp4
+demo-artifacts/*
+!demo-artifacts/demo-url.txt
 dist/
 node_modules/
