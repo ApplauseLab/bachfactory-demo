@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import type { Database } from "bun:sqlite";
 import { rowToTodo, type TodoRow } from "./db";
+import type { Auth } from "./auth";
 
 export const DEFAULT_WEB_ORIGIN = "http://localhost:5173";
 
@@ -26,14 +27,16 @@ interface CreateBody {
 
 export interface AppOptions {
   db: Database;
+  auth: Auth;
   webOrigin?: string;
 }
 
-export function createApp({ db, webOrigin = DEFAULT_WEB_ORIGIN }: AppOptions) {
+export function createApp({ db, auth, webOrigin = DEFAULT_WEB_ORIGIN }: AppOptions) {
   const corsHeaders: Record<string, string> = {
     "access-control-allow-origin": webOrigin,
     "access-control-allow-methods": "GET,POST,PATCH,DELETE,OPTIONS",
     "access-control-allow-headers": "content-type",
+    "access-control-allow-credentials": "true",
     vary: "Origin",
   };
   const listStmt = db.query<TodoRow, []>("SELECT id, title, done, created_at FROM todos ORDER BY created_at, id");
@@ -120,6 +123,20 @@ export function createApp({ db, webOrigin = DEFAULT_WEB_ORIGIN }: AppOptions) {
     }
     if (path === "/health") {
       return json({ status: "ok" }, 200, cors);
+    }
+    if (path.startsWith("/api/auth/")) {
+      const response = await auth.handler(req);
+      const headers = new Headers(response.headers);
+      for (const [name, value] of Object.entries(cors)) headers.set(name, value);
+      return new Response(response.body, {
+        status: response.status,
+        statusText: response.statusText,
+        headers,
+      });
+    }
+    if (path === "/todos" || path.startsWith("/todos/")) {
+      const session = await auth.api.getSession({ headers: req.headers });
+      if (!session) return json({ error: "unauthorized" }, 401, cors);
     }
     if (path === "/todos") {
       return handleTodos(req.method, null, req, cors);

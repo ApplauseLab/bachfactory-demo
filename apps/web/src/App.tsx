@@ -1,7 +1,24 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { api, type Todo } from "./api";
+import { authClient } from "./auth";
+import { AuthForm } from "./AuthForm";
 
 export default function App() {
+  const { data: session, isPending } = authClient.useSession();
+
+  return <SessionGate email={session?.user.email} isPending={isPending} />;
+}
+
+export function SessionGate({ email, isPending }: { email?: string; isPending: boolean }) {
+  if (isPending) {
+    return <main className="auth-shell"><div className="auth-loading">Checking your session…</div></main>;
+  }
+  if (!email) return <AuthForm />;
+
+  return <TodoWorkspace email={email} />;
+}
+
+export function TodoWorkspace({ email }: { email: string }) {
   const [todos, setTodos] = useState<Todo[]>([]);
   const [title, setTitle] = useState("");
   const [loading, setLoading] = useState(true);
@@ -72,12 +89,14 @@ export default function App() {
 
   return (
     <main className="shell">
-      <header className="header">
+      <AccountHeader email={email} onSignOut={() => void authClient.signOut()} />
+
+      <section className="header">
         <h1>Todos</h1>
         <p className="subtitle">
           {loading ? "Loading…" : `${remaining} of ${todos.length} remaining`}
         </p>
-      </header>
+      </section>
 
       <form className="add-row" onSubmit={(event) => void handleAdd(event)}>
         <input
@@ -143,5 +162,17 @@ export default function App() {
 
       <footer className="footer">Dark Factory · todo slice</footer>
     </main>
+  );
+}
+
+export function AccountHeader({ email, onSignOut }: { email: string; onSignOut: () => void }) {
+  return (
+    <header className="account-header">
+      <div>
+        <p className="eyebrow">Authenticated workspace</p>
+        <p className="account-email">{email}</p>
+      </div>
+      <button className="sign-out" onClick={onSignOut} type="button">Sign out</button>
+    </header>
   );
 }

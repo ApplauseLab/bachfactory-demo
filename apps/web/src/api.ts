@@ -17,6 +17,7 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   const { headers, ...rest } = init;
   const response = await fetch(`${API_BASE}${path}`, {
     ...rest,
+    credentials: "include",
     headers: { "content-type": "application/json", ...(headers as Record<string, string>) },
   });
   if (!response.ok) {

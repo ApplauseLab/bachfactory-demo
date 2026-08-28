@@ -79,8 +79,25 @@ async function clickWithCursor(page: Page, locator: Locator) {
   await page.waitForTimeout(500);
 }
 
-async function apiFetch(path: string, init?: RequestInit) {
-  return fetch(`${API_URL}${path}`, init);
+let authCookie = "";
+
+async function apiFetch(path: string, init: RequestInit = {}) {
+  const headers = new Headers(init.headers);
+  if (authCookie) headers.set("cookie", authCookie);
+  return fetch(`${API_URL}${path}`, { ...init, headers });
+}
+
+async function authenticateApi(): Promise<void> {
+  const email = `todo-demo-${Date.now()}@example.com`;
+  const response = await apiFetch("/api/auth/sign-up/email", {
+    method: "POST",
+    headers: { "content-type": "application/json", origin: "http://localhost:4173" },
+    body: JSON.stringify({ name: "Factory Demo", email, password: "demo-password-123" }),
+  });
+  if (!response.ok) throw new Error(`authentication failed: ${response.status}`);
+  const setCookie = response.headers.get("set-cookie") ?? "";
+  authCookie = setCookie.match(/better-auth\.session_token=[^;,]+/)?.[0] ?? "";
+  if (!authCookie) throw new Error("authentication did not return a session cookie");
 }
 
 async function seedApiTodo(title: string): Promise<string> {
@@ -117,6 +134,17 @@ test.describe("todo full stack", () => {
 
     await installCursorOverlay(page);
 
+    await authenticateApi();
+    const [name, value] = authCookie.split("=");
+    await page.context().addCookies([{
+      name: name!,
+      value: value!,
+      domain: "localhost",
+      path: "/",
+      httpOnly: true,
+      secure: true,
+      sameSite: "None",
+    }]);
     const seededId = await seedApiTodo("Triage the factory queue");
     const addedTitle = "Record the demo video";
     try {
