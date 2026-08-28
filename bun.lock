@@ -1,0 +1,16 @@
+{
+  "lockfileVersion": 2,
+  "configVersion": 1,
+  "workspaces": {
+    "": {
+      "name": "bach-example-todo-factory",
+    },
+    "apps/server": {
+      "name": "@todo/server",
+      "version": "0.1.0",
+    },
+  },
+  "packages": {
+    "@todo/server": ["@todo/server@workspace:apps/server"],
+  }
+}
